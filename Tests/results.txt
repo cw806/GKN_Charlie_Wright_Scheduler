@@ -1,0 +1,1 @@
+14483.0s for 50 runs at 27 -33 normal dist 
