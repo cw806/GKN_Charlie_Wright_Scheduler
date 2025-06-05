@@ -169,7 +169,9 @@ def solve_throughput_with_earliest(
     if move_D:
         model.AddNoOverlap(move_D)
     if move_S:
-        model.AddCumulative(move_S, [1] * len(move_S), 2)
+        # respect user-chosen capacity at 'S'
+        s_cap = station_caps.get('S', 2)
+        model.AddCumulative(move_S, [1] * len(move_S), s_cap)
 
     # finish-time vars
     finish_vars = []
@@ -181,13 +183,13 @@ def solve_throughput_with_earliest(
         finish_vars.append(lf)
 
     # objective: max throughput * BIGF – sum(finishes)
-    BIGF = H_t * (sum(run_counts.values()) + 1)
+    BIGF = H_t * (sum(run_counts.values()) + 1) 
     throughput = sum(p * w for p, w in job_presence.values())
     total_finish = sum(finish_vars)
     model.Maximize(throughput * BIGF - total_finish)
     # Solve with adaptive timeout
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 60
+    solver.parameters.max_time_in_seconds = 240
     solver.parameters.num_search_workers = multiprocessing.cpu_count()
     
     st = solver.Solve(model)

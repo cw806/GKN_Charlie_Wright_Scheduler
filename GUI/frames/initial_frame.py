@@ -27,6 +27,28 @@ class InitialFrame(ttk.Frame):
         )
         title.pack(pady=10)
 
+
+        # ─── Number of Operators ────────────────────────────────────────────
+        ops_frame = ttk.Frame(self, style="TFrame")
+        ops_frame.pack(fill="x", pady=5, padx=10)
+        ttk.Label(
+            ops_frame,
+            text="Number of operators:",
+            foreground=GKN_TEXT
+        ).pack(side="left")
+        # spinbox from 1 to 6
+        self.ops_spin = ttk.Spinbox(
+            ops_frame,
+            from_=1,
+            to=6,
+            width=3,
+            justify="center"
+        )
+        # default to whatever is already in app.station_caps['S'] or 1
+        default_s = self.app.station_caps.get("S", 1)
+        self.ops_spin.set(str(default_s))
+        self.ops_spin.pack(side="left", padx=(5,20))
+
         # Start time input
         input_frame = ttk.Frame(self, style="TFrame")
         input_frame.pack(fill="x", pady=5, padx=10)
@@ -71,6 +93,13 @@ class InitialFrame(ttk.Frame):
         for op in sorted(app.ops):
             self.lb.insert('end', op)
         self.lb.pack(fill='both', expand=True, padx=10)
+
+        # Read number of operators and put into station_caps['S']
+        try:
+            n_ops = int(self.ops_spin.get())
+        except ValueError:
+            n_ops = 1
+        self.app.station_caps['S'] = max(1, min(6, n_ops))        
 
         # Buttons frame
         btn_frame = ttk.Frame(self, style="TFrame")
@@ -147,9 +176,19 @@ class InitialFrame(ttk.Frame):
                 # done solving, now dispatch back to UI thread
                 def finish():
                     loading.destroy()
-
+                    helper = ScheduleFrame.__new__(ScheduleFrame)
+                    helper.sched        = sched
+                    helper.tasks        = tasks
+                    helper.selected_ops = self.app.selected_ops
+                    helper.ops          = self.app.ops
+                    helper.weights      = self.app.weights
+                    helper.max_runs     = self.app.max_runs
+                    helper.earliest     = self.app.earliest
+                    helper.base_minutes = 0
+                    helper.export_to_excel()
+                    self.app.destroy()
                     # if neither view requested, export & quit
-                    if not (self.app.show_simulation or self.app.show_gantt):
+                    """if not (self.app.show_simulation or self.app.show_gantt):
                         helper = ScheduleFrame.__new__(ScheduleFrame)
                         helper.sched        = sched
                         helper.tasks        = tasks
@@ -171,7 +210,7 @@ class InitialFrame(ttk.Frame):
                             self.app.ops,
                             self.app.weights,
                             self.app.max_runs
-                        )
+                        )"""
 
                 self.app.after(0, finish)
 
