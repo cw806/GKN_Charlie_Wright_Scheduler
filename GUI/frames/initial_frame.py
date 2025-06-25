@@ -101,6 +101,23 @@ class InitialFrame(ttk.Frame):
             n_ops = 1
         self.app.station_caps['S'] = max(1, min(6, n_ops))        
 
+        # Test selection dropdown
+        test_frame = ttk.Frame(self, style="TFrame")
+        test_frame.pack(fill="x", pady=5, padx=10)
+        ttk.Label(
+            test_frame,
+            text="Test type:",
+            foreground=GKN_TEXT
+        ).pack(side="left")
+        self.test_type = ttk.Combobox(
+            test_frame,
+            values=["Operator Test", "Time Limit Test"],
+            state="readonly",
+            width=15
+        )
+        self.test_type.current(0)
+        self.test_type.pack(side="left", padx=(5,20))
+
         # Buttons frame
         btn_frame = ttk.Frame(self, style="TFrame")
         btn_frame.pack(pady=10, anchor="center")
@@ -108,7 +125,108 @@ class InitialFrame(ttk.Frame):
         ttk.Button(btn_frame, text="Run ▶", command=self.on_run, style="TButton").pack(side="left", padx=10)
         ttk.Button(btn_frame, text="Cancel", command=self.on_cancel, style="TButton").pack(side="left")
         self.pack(fill="both", expand=True)
+        ttk.Button(btn_frame, text="Test", command=self.on_test).pack(side="left", padx=5)        
         ttk.Button(btn_frame,text="Import FlightBar JSON", command=self.on_import_flightbar_json).pack(side="left", padx=5)
+
+    def on_test(self):
+        # Step 1: Import history file
+        path = filedialog.askopenfilename(
+            title="Select history Excel for testing",
+            filetypes=[("Excel files","*.xlsx;*.xls")]
+        )
+        if not path:
+            return
+        try:
+            df = pd.read_excel(path, parse_dates=["Date"], dtype={"Sequence label": str})
+            df["Date"] = df["Date"].dt.date
+        except Exception as e:
+            messagebox.showerror("Load error", f"Could not read {path}:\n{e}")
+            return
+
+        test_choice = self.test_type.get()
+        results = []
+        sd, ops_dict = self.app.sd, self.app.ops
+        base_horizon = getattr(self.app, 'horizon', default_horizon)
+
+        if test_choice == "Operator Test":
+            # Vary number of operators from 1 to 6
+            for n_ops in range(1, 7):
+                self.app.station_caps['S'] = n_ops
+                for day in sorted(df["Date"].unique()):
+                    sub = df[df["Date"] == day]
+                    counts = sub["Sequence label"].value_counts().to_dict()
+                    if not counts:
+                        continue
+                    sched, tasks, _ = solve_throughput_with_earliest(
+                        selected_ops    = list(counts),
+                        stations_dict   = sd,
+                        operations_dict = ops_dict,
+                        weights         = {op:1.0 for op in counts},
+                        max_runs        = counts,
+                        horizon         = base_horizon,
+                        station_caps    = self.app.station_caps,
+                        earliest_starts = {"program_start": 0, **{op:0 for op in counts}}
+                    )
+                    procs = [ (s,e) for (jid,idx),(s,e) in sched.items() if tasks[(jid,idx)]["type"]=="PROCESS" ]
+                    total_runtime = max(e for s,e in procs) - min(s for s,e in procs) if procs else 0
+                    throughput = sum(1 for (jid,idx) in sched if idx==0)
+                    results.append({
+                        'test_type': 'Operator',
+                        'operator_count': n_ops,
+                        'Date': day,
+                        'total_runtime': total_runtime,
+                        'throughput': throughput
+                    })
+
+        else:  # Time Limit Test
+            for t_lim in range(30, 240, 10):
+                # Use current operator setting from spinbox
+                try:
+                    n_ops = int(self.ops_spin.get())
+                except ValueError:
+                    n_ops = 1
+                self.app.station_caps['S'] = n_ops
+                for day in sorted(df["Date"].unique()):
+                    sub = df[df["Date"] == day]
+                    counts = sub["Sequence label"].value_counts().to_dict()
+                    if not counts:
+                        continue
+                    sched, tasks, _ = solve_throughput_with_earliest(
+                        selected_ops    = list(counts),
+                        stations_dict   = sd,
+                        operations_dict = ops_dict,
+                        weights         = {op:1.0 for op in counts},
+                        max_runs        = counts,
+                        horizon         = base_horizon,
+                        station_caps    = self.app.station_caps,
+                        earliest_starts = {"program_start": 0, **{op:0 for op in counts}},
+                        time_limit      = t_lim
+                    )
+                    procs = [ (s,e) for (jid,idx),(s,e) in sched.items() if tasks[(jid,idx)]["type"]=="PROCESS" ]
+                    total_runtime = max(e for s,e in procs) - min(s for s,e in procs) if procs else 0
+                    throughput = sum(1 for (jid,idx) in sched if idx==0)
+                    results.append({
+                        'test_type': 'TimeLimit',
+                        'time_limit': t_lim,
+                        'Date': day,
+                        'total_runtime': total_runtime,
+                        'throughput': throughput
+                    })
+
+        # Export results
+        out_df = pd.DataFrame(results)
+        fn = "test_results.xlsx"
+        idx = 0
+        while os.path.exists(fn):
+            idx += 1
+            fn = f"test_results_{idx}.xlsx"
+        try:
+            out_df.to_excel(fn, index=False)
+            messagebox.showinfo("Done", f"Test results written to {fn}")
+            os.startfile(fn)
+        except Exception as e:
+            messagebox.showerror("Write error", f"Could not write {fn}:\n{e}")
+
     def on_import_flightbar_json(self):
         """Load a FlightBar JSON, extract kNumbers→ops and efficiencies→weights,
         and then either export Excel or show the schedule GUI."""
@@ -171,6 +289,7 @@ class InitialFrame(ttk.Frame):
                     getattr(self.app, 'horizon', default_horizon),
                     self.app.station_caps,
                     self.app.earliest
+
                 )
 
                 # done solving, now dispatch back to UI thread

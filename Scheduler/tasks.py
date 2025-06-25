@@ -11,7 +11,7 @@ def build_tasks(seq, stations_dict):
     for a single operation sequence.  No storage buffers.
     """
     tasks = []
-    # Initial PROCESS at S
+    # Always add initial PROCESS at S, even if duration is 0
     stn0, min0, max0 = seq[0]
     tasks.append(("PROCESS", "S", min0, None, None, min0, max0))
     # MOVE to the first real station
@@ -19,6 +19,7 @@ def build_tasks(seq, stations_dict):
     tasks.append(("MOVE", None, movement_time("S", next_st, stations_dict), "S", next_st, None, None))
 
     for i, (stn, mind, maxd) in enumerate(seq[1:], start=1):
+        # Only add PROCESS if duration > 0
         if mind > 0:
             tasks.append(("PROCESS", stn, mind, None, None, mind, maxd))
         nxt = seq[i+1][0] if i+1 < len(seq) else "FIN"

@@ -71,7 +71,7 @@ class RunParamsFrame(ttk.Frame):
         hdr.pack(fill="x", pady=(0,2))
         ttk.Label(hdr, text="Job ID",                width=20, anchor="w")\
             .grid(row=0, column=0, padx=5)
-        ttk.Label(hdr, text="Weight",                width=10, anchor="w")\
+        ttk.Label(hdr, text="Importance",                width=10, anchor="w")\
             .grid(row=0, column=1, padx=5)
         ttk.Label(hdr, text="Earliest (HHMM)",       width=12, anchor="w")\
             .grid(row=0, column=2, padx=5)

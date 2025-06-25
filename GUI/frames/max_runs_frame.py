@@ -8,7 +8,7 @@ from GUI.colours import GKN_BG, GKN_TEXT
 class MaxRunsFrame(ttk.Frame):
     def __init__(self, master, app):
         # shrink the content region to 20% width
-        app.set_content_size(0.2)
+        app.set_content_size(0.22)
         super().__init__(master, style="TFrame")
         self.app = app
 

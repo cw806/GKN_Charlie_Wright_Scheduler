@@ -6,7 +6,7 @@ import math
 from ortools.sat.python import cp_model
 from .tasks import build_tasks
 from .load_data import movement_time
-from Data.universal_variable import TIME_UNIT, DEFAULT_HORIZON
+from Data.universal_variable import TIME_UNIT, DEFAULT_HORIZON, Timespan
 from .utils import (
     station_xy,
     make_station_colors,
@@ -32,7 +32,8 @@ def solve_throughput_with_earliest(
     earliest_starts=None,
     latest_finishes=None,
     time_unit: int = TIME_UNIT,
-    precedence:   dict  = None,            # ← new!
+    precedence:   dict  = None,
+    time_limit: float = Timespan,            
 
 
 ):
@@ -161,17 +162,16 @@ def solve_throughput_with_earliest(
     # station capacities
     for stn, ivs in station_intervals.items():
         cap = station_caps.get(stn, 1)
-        if cap == 1:
+        if cap <= 1:
             model.AddNoOverlap(ivs)
         else:
             model.AddCumulative(ivs, [1] * len(ivs), cap)
+
     # move-line capacities
     if move_D:
         model.AddNoOverlap(move_D)
     if move_S:
-        # respect user-chosen capacity at 'S'
-        s_cap = station_caps.get('S', 2)
-        model.AddCumulative(move_S, [1] * len(move_S), s_cap)
+        model.AddCumulative(move_S, [1] * len(move_S), station_caps.get("S", 0))
 
     # finish-time vars
     finish_vars = []
@@ -189,7 +189,7 @@ def solve_throughput_with_earliest(
     model.Maximize(throughput * BIGF - total_finish)
     # Solve with adaptive timeout
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 240
+    solver.parameters.max_time_in_seconds = time_limit
     solver.parameters.num_search_workers = multiprocessing.cpu_count()
     
     st = solver.Solve(model)
